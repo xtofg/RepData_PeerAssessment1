@@ -8,18 +8,117 @@ output:
 
 ## Loading and preprocessing the data
 
-
+```{r}
+setwd("~/Documents/Coursera/5 - Reproducible research/Assignment 1/RepData_PeerAssessment1")
+data_raw <- read.csv("activity.csv")
+data <- data_raw[complete.cases(data_raw),]
+```
 
 ## What is mean total number of steps taken per day?
 
+```{r}
+library(dplyr)
 
+stepsbyday <- data %>% group_by(date) %>% summarize(steps= sum(steps))
+
+hist(stepsbyday$steps,breaks=20, main= "Number of steps per day", xlab = "Steps")
+
+abline(v=mean(stepsbyday$steps),col="red")
+abline(v=median(stepsbyday$steps),col="blue")
+legend("topright", c("Mean","Median"),lty=1, col=c("red","blue"))
+```
+
+The mean and the median are almost indistinguishable:
+```{r}
+mean(stepsbyday$steps)
+median(stepsbyday$steps)
+```
 
 ## What is the average daily activity pattern?
 
+```{r}
+stepsbyhour <- data %>% group_by(interval) %>% summarize (steps = mean(steps))
+```
 
+The maximum is reached for the interval:
+```{r}
+maxi <-stepsbyhour$interval[which.max(stepsbyhour$steps)]
+print(maxi)
+
+plot(stepsbyhour, type = "l")
+abline(v=maxi,col="red")
+```
 
 ## Imputing missing values
+Number and percentage of missing values:
+```{r}
+sum(is.na(data_raw$steps))
+sum(is.na(data_raw$steps)) / length(data_raw$steps) * 100
+```
 
+A look at the data shows that NA values come by entire days. We can then replace this missing days by an "average" day (computed previously in **stepsbyhour**).
+
+```{r}
+where <- which(is.na(data_raw$steps))
+
+data_filled <- data_raw    # copy
+for (i in where)
+{
+  missing_interval <- data_raw$interval[i]
+  data_filled$steps[i] <-stepsbyhour$steps[ stepsbyhour$interval == missing_interval ]
+}
+
+```
+
+Checking if it worked:
+```{r}
+head(data_raw)
+head(data_filled)
+```
+and if we didn't mess everything up:
+```{r}
+data_raw[1000:1010,]
+data_filled[1000:1010,]
+```
+
+Let's have a look at the new data:
+```{r}
+stepsbyday_filled <- data_filled %>% group_by(date) %>% summarize(steps= sum(steps))
+
+hist(stepsbyday_filled$steps,breaks=20, main= "Number of steps per day", xlab = "Steps")
+
+abline(v=mean(stepsbyday_filled$steps),col="red")
+abline(v=median(stepsbyday_filled$steps),col="blue")
+legend("topright", c("Mean","Median"),lty=1, col=c("red","blue"))
+
+mean(stepsbyday_filled$steps)
+median(stepsbyday_filled$steps)
+```
+As a reminder, dropping the NAs yielded:
+```{r}
+mean(stepsbyday$steps)
+median(stepsbyday$steps)
+```
+
+The mean hasn't moved at all: we only completed the previous data with an average day, preserving the mean.
+The median has slightly changed and now equals the mean.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+My R install is in French so weekends are *samedi* (Saturday) and *dimanche* (Sunday):
+```{r}
+data_filled$daytype <- weekdays(as.Date(data_filled$date)) %in% c("samedi","dimanche")
+data_filled$daytype <- factor(data_filled$daytype, levels=c("TRUE","FALSE"),label=c("weekend","weekday"))
+
+```
+
+
+```{r}
+stepsbyhour_filled <- data_filled %>% group_by(daytype,interval) %>% summarize (steps = mean(steps))
+
+library(lattice)
+xyplot(steps~interval| daytype, stepsbyhour_filled, type="l", layout=c(1,2))
+```
+
+It looks like he wakes up early during the weekdays to go and sit all day long: he has an office job.
